@@ -1,6 +1,6 @@
 # Shared settings for both people. Change a value here, never inside a script.
 
-data_root: /kaggle/input/sdobenchmark      # folder that contains training/ and test/ (auto-searched if not found)
+data_root: /kaggle/input/datasets/fhnw-i4ds/sdobenchmark/SDOBenchmark_full      # folder that contains training/ and test/ (auto-searched if not found)
 splits_file: results/splits.csv            # written by src/data/split.py, read by everything else
 
 # Label
