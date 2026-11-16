@@ -12,13 +12,15 @@ It then computes each channel's mean and standard deviation on the TRAINING fold
 It also indexes the magnetogram so the shared loader {hmi, aia, label} works; the HMI
 normalisation itself is fixed (grey 128 = zero field) and belongs to Person 1.
 
-Run (takes a few minutes: it opens about 28,000 images)
+Run (opens about 28,000 images, 16 at a time; prints progress every 500 samples)
     python src/data/prepare_aia.py
 """
 import argparse
 import json
 import os
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pandas as pd
@@ -26,7 +28,7 @@ import yaml
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from data.split import find_data_root  # noqa: E402
+from split import find_data_root  # noqa: E402
 
 
 def read_end_times(data_root: str) -> pd.Series:
@@ -58,6 +60,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Index usable images and compute normalisation statistics.")
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--data-root", default=None)
+    parser.add_argument("--threads", type=int, default=16, help="images are read in parallel; lower this if Kaggle complains")
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -75,29 +78,41 @@ def main() -> None:
     problems = {c: {"missing": 0, "blank": 0} for c in channels}
     rows = []
 
-    for i, row in enumerate(splits.itertuples()):
-        if i % 1000 == 0:
-            print(f"  {i}/{len(splits)} samples checked", flush=True)
+    def check_sample(job):
+        """Find and check the images of one sample. Runs in a thread: the slow part is the disk."""
+        row, use_for_stats = job
         sample_dir = os.path.join(data_root, row.path)
         files = last_step_files(sample_dir, end_times[row.id], float(config["last_step_max_minutes"]))
-        entry = {"id": row.id}
+        entry, issues, sums = {"id": row.id}, {}, {}
         for channel in channels:
             entry[channel] = ""
             if channel not in files:
-                problems[channel]["missing"] += 1
+                issues[channel] = "missing"
                 continue
             pixels = np.asarray(Image.open(os.path.join(sample_dir, files[channel])).convert("L"), dtype=np.float32)
             if pixels.std() < float(config["blank_std"]):
-                problems[channel]["blank"] += 1
+                issues[channel] = "blank"
                 continue
             entry[channel] = os.path.join(row.path, files[channel])
-            if channel in stats and is_train_fold.iloc[i]:
+            if channel in stats and use_for_stats:
                 scaled = pixels / 255.0
-                stats[channel]["n"] += scaled.size
-                stats[channel]["sum"] += float(scaled.sum())
-                stats[channel]["sum_sq"] += float((scaled ** 2).sum())
+                sums[channel] = (scaled.size, float(scaled.sum()), float((scaled ** 2).sum()))
         entry["usable"] = all(entry[c] != "" for c in channels)
-        rows.append(entry)
+        return entry, issues, sums
+
+    jobs = list(zip(splits.itertuples(), is_train_fold.tolist()))
+    started = time.time()
+    with ThreadPoolExecutor(max_workers=args.threads) as pool:
+        for i, (entry, issues, sums) in enumerate(pool.map(check_sample, jobs)):
+            if i % 500 == 0:
+                print(f"  {i}/{len(jobs)} samples checked ({time.time() - started:.0f}s)", flush=True)
+            rows.append(entry)
+            for channel, kind in issues.items():
+                problems[channel][kind] += 1
+            for channel, (n, total, total_sq) in sums.items():
+                stats[channel]["n"] += n
+                stats[channel]["sum"] += total
+                stats[channel]["sum_sq"] += total_sq
 
     index = pd.DataFrame(rows)
     index.to_csv(config["index_file"], index=False)
