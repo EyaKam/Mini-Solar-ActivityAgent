@@ -16,6 +16,7 @@ Use in training code
 Self-check (prints sizes and one batch)
     python src/data/dataset.py
 """
+
 import json
 import os
 import sys
@@ -28,7 +29,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from data.split import find_data_root  # noqa: E402
+from split import find_data_root  # noqa: E402
 
 PARTS = ("train", "validation", "test")
 
@@ -39,7 +40,9 @@ def load_config(path: str = "config.yaml") -> dict:
 
 
 class SolarDataset(Dataset):
-    def __init__(self, config: dict, part: str, augment: bool = False, data_root: str = None):
+    def __init__(
+        self, config: dict, part: str, augment: bool = False, data_root: str = None
+    ):
         assert part in PARTS, f"part must be one of {PARTS}"
         self.data_root = find_data_root(data_root or config["data_root"])
         self.aia_channels = [str(c) for c in config["aia_channels"]]
@@ -61,7 +64,9 @@ class SolarDataset(Dataset):
             keep = (table.split == "train") & (table.fold == val_fold)
         else:
             keep = (table.split == "train") & (table.fold != val_fold)
-        self.n_dropped = int((keep & ~table.usable).sum())       # samples lost to missing / blank images
+        self.n_dropped = int(
+            (keep & ~table.usable).sum()
+        )  # samples lost to missing / blank images
         self.table = table[keep & table.usable].reset_index(drop=True)
 
     def __len__(self) -> int:
@@ -87,10 +92,17 @@ class SolarDataset(Dataset):
             # vertical flip only, the same for both instruments so they stay aligned.
             # The dataset authors advise against horizontal flips and random crops.
             aia, hmi = aia.flip(-2), hmi.flip(-2)
-        return {"aia": aia, "hmi": hmi, "label": torch.tensor(float(row.y)), "id": row.id}
+        return {
+            "aia": aia,
+            "hmi": hmi,
+            "label": torch.tensor(float(row.y)),
+            "id": row.id,
+        }
 
 
-def make_loader(config: dict, part: str, batch_size: int = None, data_root: str = None) -> DataLoader:
+def make_loader(
+    config: dict, part: str, batch_size: int = None, data_root: str = None
+) -> DataLoader:
     """Training is shuffled and augmented; validation and test are neither."""
     is_train = part == "train"
     dataset = SolarDataset(config, part, augment=is_train, data_root=data_root)
@@ -112,17 +124,27 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = load_config(args.config)
 
-    print(f"{'part':12s} {'samples':>8s} {'positives':>10s} {'% positive':>11s} {'dropped':>8s}")
+    print(
+        f"{'part':12s} {'samples':>8s} {'positives':>10s} {'% positive':>11s} {'dropped':>8s}"
+    )
     for part in PARTS:
         ds = SolarDataset(config, part, data_root=args.data_root)
-        print(f"{part:12s} {len(ds):8d} {int(ds.labels.sum()):10d} {100 * ds.labels.mean():11.1f} {ds.n_dropped:8d}")
+        print(
+            f"{part:12s} {len(ds):8d} {int(ds.labels.sum()):10d} {100 * ds.labels.mean():11.1f} {ds.n_dropped:8d}"
+        )
 
-    batch = next(iter(make_loader(config, "train", batch_size=8, data_root=args.data_root)))
+    batch = next(
+        iter(make_loader(config, "train", batch_size=8, data_root=args.data_root))
+    )
     print("\none training batch")
     for name in ("aia", "hmi"):
         t = batch[name]
-        print(f"  {name:5s} shape {tuple(t.shape)}  mean {t.mean():+.2f}  std {t.std():.2f}  min {t.min():+.2f}  max {t.max():+.2f}")
+        print(
+            f"  {name:5s} shape {tuple(t.shape)}  mean {t.mean():+.2f}  std {t.std():.2f}  min {t.min():+.2f}  max {t.max():+.2f}"
+        )
     print(f"  label {batch['label'].tolist()}")
     print(f"  id    {batch['id'][0]} ...")
-    assert torch.isfinite(batch["aia"]).all() and torch.isfinite(batch["hmi"]).all(), "NaN or inf in a batch"
+    assert torch.isfinite(batch["aia"]).all() and torch.isfinite(batch["hmi"]).all(), (
+        "NaN or inf in a batch"
+    )
     print("\nloader OK")
