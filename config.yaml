@@ -1,18 +1,27 @@
 # Shared settings for both people. Change a value here, never inside a script.
 
-data_root: /kaggle/input/datasets/fhnw-i4ds/sdobenchmark/SDOBenchmark_full      # folder that contains training/ and test/ (auto-searched if not found)
-splits_file: results/splits.csv            # written by src/data/split.py, read by everything else
+data_root: /kaggle/input/datasets/fhnw-i4ds/sdobenchmark/SDOBenchmark_full   # contains training/ and test/ (auto-searched if not found)
+
+# Files produced once, committed to the repo, then only read
+splits_file: results/splits.csv            # step 1: who is in train / validation / test
+index_file: results/index.csv              # step 2: which image file to load for each sample and channel
+norm_file: results/norm_stats.json         # step 2: mean and std of each channel
 
 # Label
 flare_threshold: 1.0e-5                    # peak_flux >= this value -> y = 1 (class M and above)
 
 # Split
 seed: 42
-n_folds: 5                                 # validation folds, grouped by active region
-val_fold: 0                                # the fold used as validation when training a single model
+n_folds: 5
+val_fold: 0                                # the fold used as validation; the other four are training
 
-# Inputs (decided on day 1, used from step 2 on)
+# Inputs
 image_size: 256
-time_step: last                            # 10 minutes before the forecast window
 hmi_channels: [magnetogram]
 aia_channels: ["94", "131"]
+last_step_max_minutes: 60                  # an image counts as "last time step" if taken at most this long before the forecast window
+blank_std: 3.0                             # an image whose pixel standard deviation is below this is treated as blank
+
+# Loading
+batch_size: 32
+num_workers: 2
