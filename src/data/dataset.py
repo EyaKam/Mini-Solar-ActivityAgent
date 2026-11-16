@@ -28,7 +28,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from split import find_data_root  # noqa: E402
+from data.split import find_data_root  # noqa: E402
 
 PARTS = ("train", "validation", "test")
 

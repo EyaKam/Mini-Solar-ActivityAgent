@@ -26,7 +26,7 @@ import yaml
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from split import find_data_root  # noqa: E402
+from data.split import find_data_root  # noqa: E402
 
 
 def read_end_times(data_root: str) -> pd.Series:
