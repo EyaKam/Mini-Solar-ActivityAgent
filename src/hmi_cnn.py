@@ -82,7 +82,10 @@ def predict(model: nn.Module, loader, device: str) -> pd.DataFrame:
 def train_one_epoch(model, loader, loss_fn, optimizer, device: str) -> float:
     model.train()
     total, count = 0.0, 0
-    for batch in loader:
+    started = time.time()
+    for step, batch in enumerate(loader, 1):
+        if step == 1 or step % 50 == 0:
+            print(f"    batch {step}/{len(loader)} | {time.time() - started:.0f}s", flush=True)
         x, y = batch["hmi"].to(device), batch["label"].to(device)
         optimizer.zero_grad()
         loss = loss_fn(model(x), y)
@@ -101,6 +104,8 @@ def write_predictions(table: pd.DataFrame, path: str) -> None:
 
 def run_fold(config: dict, val_fold: int, args, device: str) -> None:
     config = {**config, "val_fold": val_fold}            # the loader reads the validation fold from the config
+    if args.num_workers is not None:
+        config["num_workers"] = args.num_workers
     torch.manual_seed(int(config["seed"]) + val_fold)
     np.random.seed(int(config["seed"]) + val_fold)
 
@@ -153,6 +158,7 @@ def main() -> None:
     parser.add_argument("--width", type=int, default=16, help="channels of the first block (doubles at each block)")
     parser.add_argument("--select", choices=["best", "last"], default="best",
                         help="best: epoch with the highest validation TSS; last: always the last epoch (no peeking)")
+    parser.add_argument("--num-workers", type=int, default=None, help="override num_workers of the config (0 = no worker processes)")
     parser.add_argument("--models-dir", default="models")
     parser.add_argument("--with-test", action="store_true", help="also write test predictions (end of project only)")
     args = parser.parse_args()
